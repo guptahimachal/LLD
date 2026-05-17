@@ -110,7 +110,7 @@ Beyond basic `synchronized` blocks, Java gives us powerful explicit locks in `ja
 * **Senior details:** 
   * **Fairness:** You can pass `true` in the constructor. *How it works:* It keeps a queue. The thread waiting the longest gets the lock next. (Avoids thread starvation).
   * **tryLock():** *How it works:* A thread tries to get the lock. If it's busy, the thread doesn't get stuck waiting; it just skips the work or does something else.
-  * **lockInterruptibly():** *How it works:* If a thread is stuck waiting for a lock, another thread can interrupt and kill it cleanly. `synchronized` cannot do this!
+  * **lockInterruptibly():** *How it works:* If a thread is stuck waiting for a lock, another thread can interrupt and kill it cleanly. **Critical rule:** Without this (i.e. using `synchronized` or `.lock()`), calling `Thread.interrupt()` is completely ignored while the thread is waiting in line!
 * **LLD Use Case:** Design a **Thread-Safe Bounded Blocking Queue** or a **Task Scheduler** (where you might need `lockInterruptibly` to cancel waiting tasks).
 * **Usage (Protecting a Counter):**
   ```java
@@ -194,6 +194,19 @@ Beyond basic `synchronized` blocks, Java gives us powerful explicit locks in `ja
       }
       return currentX + currentY;
   }
+
+  // NOTE: There is NO "optimistic write" in StampedLock. 
+  // Writes mutate state and must always be exclusive.
+  public void setValues(int newX, int newY) {
+      long stamp = stampedLock.writeLock(); // Always pessimistic
+      try {
+          x = newX;
+          y = newY;
+      } finally {
+          stampedLock.unlockWrite(stamp);
+      }
+  }
+
   ```
 
 ### 4. Semaphore
@@ -214,6 +227,34 @@ Beyond basic `synchronized` blocks, Java gives us powerful explicit locks in `ja
           Thread.currentThread().interrupt();
       } finally {
           semaphore.release(); 
+      }
+  }
+  ```
+
+### 5. Atomic Classes & CAS (DB-Style Optimistic Locking)
+* **What it is:** What you do in a Database with Optimistic Locking (`UPDATE ... WHERE version = expectedVersion`) is called **Compare-And-Swap (CAS)** in Java.
+* **Senior details:** 
+  * We don't use `StampedLock` for this. Instead, we use `AtomicInteger`, `AtomicLong`, or `AtomicReference`.
+  * These classes use CPU-level hardware instructions to perform an update *only* if the underlying value hasn't changed since you last looked at it.
+  * If a thread computes a new state but another thread sneaks in and updates the variable first, the CAS operation returns `false`. Your thread then loops, reads the *new* state, recalculates, and tries the CAS again.
+* **LLD Use Case:** Design a **Lock-Free Counter** for a metrics aggregator, or a **Non-Blocking Concurrent Data Structure**.
+* **Usage (Lock-Free X and Y update):**
+  ```java
+  class Point { final int x, y; Point(int x, int y) { this.x=x; this.y=y; } }
+  
+  AtomicReference<Point> currentPoint = new AtomicReference<>(new Point(0, 0));
+  
+  public void updatePointOptimistically(int newX, int newY) {
+      while (true) {
+          Point expected = currentPoint.get(); // Read current state (like reading DB version)
+          
+          Point next = new Point(newX, newY);  // Calculate new state
+          
+          // Atomically check if it's still 'expected'. If yes, swap to 'next' and return true.
+          // If no (someone else updated it), return false, and the while-loop retries!
+          if (currentPoint.compareAndSet(expected, next)) {
+              break; // Success!
+          }
       }
   }
   ```
