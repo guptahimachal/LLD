@@ -5,7 +5,7 @@
 
 ---
 
-## ✅ Current Progress Snapshot
+## ✅ Current Progress Snapshot  
 
 | Topic | Status |
 |---|---|
@@ -74,7 +74,7 @@ Phase 4          → Mock + Articulation Drill    [2 days]
 
 ```
 ✅ Thread safety fundamentals
-✅ synchronized vs ReentrantLock vs ReadWriteLock
+✅ synchronized vs Reentran   tLock vs ReadWriteLock
 ✅ volatile keyword (you know this from Singleton DCL)
 ✅ ConcurrentHashMap, CopyOnWriteArrayList
 ✅ Atomic classes (AtomicInteger, AtomicReference)
@@ -152,6 +152,18 @@ Phase 4          → Mock + Articulation Drill    [2 days]
 ### 1. 🅐 Parking Lot *(folder exists)*
 > **Frequency**: 🔴 Very High | **Time**: 60–75 mins | **Asked at**: Amazon, Flipkart, Microsoft, Oracle
 
+**Problem Statement**: Design a multi-level parking lot system.
+**Functional Requirements**:
+- Support multiple floors and parking spot types (Compact, Large, Handicapped, EV).
+- Support multiple vehicle types (Car, Truck, Bike).
+- Issue tickets at the entrance and process payment at the exit.
+- Dynamically assign the nearest available parking spot.
+- Support different pricing strategies (Hourly, Flat, Surge).
+**Non-Functional Requirements**:
+- **Concurrency**: Thread-safe spot allocation to prevent double-booking.
+- **Latency**: Low latency for ticket generation at entry.
+- **Extensibility**: Easy to add new vehicle/spot types or pricing strategies.
+
 **Why it's the best starter**: Covers every OOP fundamental — inheritance (Vehicle types), encapsulation (Spot state), composition (Floor has Spots), and polymorphism. Forces Factory + Strategy.
 
 **Core Entities**: `ParkingLot`, `Floor`, `ParkingSpot` (Compact/Large/EV/Handicapped), `Vehicle` (Car/Truck/Bike), `Ticket`, `PricingStrategy`
@@ -175,6 +187,18 @@ Phase 4          → Mock + Articulation Drill    [2 days]
 
 ### 2. 🅑 Movie Ticket Booking (BookMyShow) *(NEW — not in workspace)*
 > **Frequency**: 🔴 Very High | **Time**: 75–90 mins | **Asked at**: Amazon, Flipkart, Myntra, PhonePe
+
+**Problem Statement**: Design an online movie ticket booking system.
+**Functional Requirements**:
+- Users can search movies by city, cinema, or language.
+- Users can view available shows and select seats (Silver, Gold, Platinum).
+- Support temporary seat locking while payment is pending (e.g., 10 mins).
+- Generate booking confirmation and send notifications.
+- Handle full/partial ticket cancellations.
+**Non-Functional Requirements**:
+- **Concurrency**: Prevent double booking for the same seat under high contention.
+- **Availability**: Highly available search and read operations.
+- **Consistency**: ACID properties for payment and booking transactions.
 
 **Why it's critical**: The single most commonly asked *concurrency-heavy* LLD problem. Seat booking under contention is what separates SDE1 from SDE2 answers.
 
@@ -203,6 +227,18 @@ Phase 4          → Mock + Articulation Drill    [2 days]
 ### 3. 🅒 Elevator System *(folder exists)*
 > **Frequency**: 🔴 High | **Time**: 60–75 mins | **Asked at**: Amazon, Flipkart, Microsoft, Walmart
 
+**Problem Statement**: Design a multi-elevator control system for a tall building.
+**Functional Requirements**:
+- Passengers can request an elevator from any floor (Up/Down).
+- Passengers inside the elevator can press floor buttons.
+- Dispatching algorithm to minimize wait time (e.g., SCAN algorithm).
+- Display current floor and direction.
+- Handle weight limits and emergency alarms.
+**Non-Functional Requirements**:
+- **Responsiveness**: Real-time state updates and decision making.
+- **Concurrency**: Thread-safe request queuing from multiple concurrent users.
+- **Fault Tolerance**: Re-route requests if an elevator fails.
+
 **Why it's important**: The classic State Machine + Scheduling Strategy problem. Tests if you can model lifecycle transitions cleanly.
 
 **Core Entities**: `ElevatorSystem`, `Elevator`, `ElevatorState` (IDLE/MOVING_UP/MOVING_DOWN/DOOR_OPEN), `Request` (internal/external), `Scheduler`
@@ -227,6 +263,17 @@ Phase 4          → Mock + Articulation Drill    [2 days]
 
 ### 4. 🅓 LRU Cache / LFU Cache *(NEW — not in workspace)*
 > **Frequency**: 🔴 Very High | **Time**: 45–60 mins | **Asked at**: EVERY major company
+
+**Problem Statement**: Design an in-memory caching system with a specific eviction policy.
+**Functional Requirements**:
+- `put(key, value)`: Insert or update a key-value pair.
+- `get(key)`: Retrieve value for the key if present, else return null.
+- Evict the least recently used / least frequently used item when capacity is reached.
+- Support optional Time-To-Live (TTL) for keys.
+**Non-Functional Requirements**:
+- **Performance**: O(1) time complexity for get and put operations.
+- **Concurrency**: Thread-safe concurrent reads and writes.
+- **Memory**: Strictly bounded memory usage.
 
 **Why it's critical**: Asked at almost every top company. Tests data structure knowledge inside OOP. Deceptively simple but rich in design decisions.
 
@@ -265,6 +312,18 @@ HashMap<K, Node> + HashMap<freq, DoublyLinkedList> + minFreq counter
 ### 5. 🅔 Splitwise *(folder exists)*
 > **Frequency**: 🟠 High | **Time**: 60–75 mins | **Asked at**: Flipkart, Razorpay, Swiggy, PhonePe
 
+**Problem Statement**: Design an expense sharing application.
+**Functional Requirements**:
+- Users can create groups and add members.
+- Add expenses with different split strategies (Equal, Exact, Percentage, Shares).
+- Maintain running balances for who owes whom.
+- Simplify debts to minimize the total number of transactions.
+- Support settling up balances.
+**Non-Functional Requirements**:
+- **Consistency**: Accuracy and consistency of financial data.
+- **Concurrency**: Thread-safe updates to user balances when concurrent expenses are added.
+- **Auditability**: Maintain an immutable audit trail of all transactions.
+
 **Core Entities**: `User`, `Group`, `Expense`, `Split` (Equal/Exact/Percentage/Share), `Balance`, `Transaction`
 
 **Patterns to Apply**:
@@ -292,6 +351,18 @@ HashMap<K, Node> + HashMap<freq, DoublyLinkedList> + minFreq counter
 ### 6. 🅕 Notification System / Event Bus *(NEW)*
 > **Frequency**: 🟠 High | **Time**: 45–60 mins | **Asked at**: Swiggy, Uber, Flipkart, Meesho, PhonePe
 
+**Problem Statement**: Design a centralized notification platform.
+**Functional Requirements**:
+- Send notifications across multiple channels (Email, SMS, Push, WhatsApp).
+- Support different types of events (Promotional, Transactional, Alerts).
+- Allow users to opt-in/opt-out of specific notification types.
+- Support rate limiting and prioritization of messages.
+- Track delivery status and provide fallback channels.
+**Non-Functional Requirements**:
+- **Throughput**: High throughput for bulk messaging.
+- **Reliability**: Asynchronous processing with retry mechanisms and at-least-once delivery guarantee.
+- **Extensibility**: Easy to plug in new notification channels.
+
 **Why it's hot right now**: Every modern backend system has notifications. Tests Observer + Factory + Chain of Responsibility deeply.
 
 **Core Entities**: `NotificationService`, `NotificationChannel` (Email/SMS/Push/WhatsApp), `User`, `NotificationTemplate`, `EventType`
@@ -308,6 +379,17 @@ HashMap<K, Node> + HashMap<freq, DoublyLinkedList> + minFreq counter
 
 ### 7. 🅖 Rate Limiter *(folder exists)*
 > **Frequency**: 🟠 High | **Time**: 45–60 mins | **Asked at**: Uber, Razorpay, Amazon, Swiggy
+
+**Problem Statement**: Design an API rate limiter to protect backend services.
+**Functional Requirements**:
+- Restrict the number of requests per user/IP over a given time window.
+- Support different algorithms (Token Bucket, Sliding Window, Fixed Window).
+- Return HTTP 429 (Too Many Requests) when the limit is exceeded.
+- Allow configurable rules per API endpoint or user tier.
+**Non-Functional Requirements**:
+- **Latency**: Extremely low latency (should not slow down the API).
+- **Concurrency**: High concurrency handling across multiple distributed nodes.
+- **Memory**: Minimal memory footprint for tracking counters.
 
 **Core Entities**: `RateLimiter`, `RateLimitRule`, `RequestContext`, `TokenBucket` / `SlidingWindowCounter`
 
@@ -332,6 +414,18 @@ HashMap<K, Node> + HashMap<freq, DoublyLinkedList> + minFreq counter
 ### 8. 🅗 Ride Sharing / Uber LLD *(NEW)*
 > **Frequency**: 🟠 High | **Time**: 75–90 mins | **Asked at**: Uber, Ola, Swiggy, Rapido
 
+**Problem Statement**: Design a ride-hailing service like Uber.
+**Functional Requirements**:
+- Riders can request rides (Pool, Standard, Premium).
+- Real-time tracking of driver locations.
+- Match rider with the nearest optimal driver.
+- Calculate estimated time of arrival (ETA) and dynamic pricing (Surge).
+- Complete trip and process payment.
+**Non-Functional Requirements**:
+- **Latency**: High availability and real-time updates for location tracking.
+- **Consistency**: Strict consistency in trip state transitions (e.g., driver can only accept one ride).
+- **Scalability**: Capable of handling thousands of concurrent ride requests and location pings.
+
 **Core Entities**: `Driver`, `Rider`, `Trip`, `TripState` (REQUESTED/DRIVER_ASSIGNED/IN_PROGRESS/COMPLETED), `Location`, `PricingEngine`, `MatchingService`
 
 **Patterns to Apply**:
@@ -346,6 +440,18 @@ HashMap<K, Node> + HashMap<freq, DoublyLinkedList> + minFreq counter
 
 ### 9. 🅘 Wallet / Payment Gateway *(folder exists)*
 > **Frequency**: 🟠 High | **Time**: 60 mins | **Asked at**: Razorpay, PhonePe, Paytm, Amazon Pay
+
+**Problem Statement**: Design a digital wallet and payment gateway system.
+**Functional Requirements**:
+- Users can load money into their wallet and check balances.
+- Support processing transactions via different payment methods (Card, NetBanking, UPI).
+- Deduct/credit balances securely.
+- View transaction history.
+- Handle refunds and failed transactions.
+**Non-Functional Requirements**:
+- **Idempotency**: Prevent double charge on retries.
+- **Consistency**: ACID compliance for all balance updates.
+- **Security**: High security, encryption, and auditability.
 
 **Core Entities**: `Wallet`, `Transaction`, `PaymentMethod` (UPI/Card/NetBanking), `TransactionStatus`, `IdempotencyKey`
 
@@ -364,6 +470,18 @@ HashMap<K, Node> + HashMap<freq, DoublyLinkedList> + minFreq counter
 
 ### 10. 🅙 ATM Machine *(folder exists)*
 > **Frequency**: 🟡 Medium | **Time**: 45–60 mins | **Asked at**: Flipkart, TCS, Infosys, Razorpay
+
+**Problem Statement**: Design the software for an Automated Teller Machine.
+**Functional Requirements**:
+- Authenticate user via Card and PIN.
+- Support operations: Cash Withdrawal, Deposit, Balance Inquiry.
+- Dispense minimum number of currency notes for withdrawals.
+- Check ATM machine cash balance before dispensing.
+- Print transaction receipts.
+**Non-Functional Requirements**:
+- **Consistency**: Sequential, secure state transitions.
+- **Fault Tolerance**: Handling hardware failures (e.g., cash stuck, card stuck).
+- **Transactional**: Rollback capability if dispensing fails after debit.
 
 **Patterns to Apply**:
 - **State** → `IdleState`, `CardInsertedState`, `PINEnteredState`, `TransactionState`, `DispensingState`
