@@ -1,6 +1,5 @@
 package org.example.service.billing;
 
-import org.example.exception.InvalidArguementException;
 import org.example.model.Booking;
 import org.example.model.Invoice;
 import org.example.model.Money;
@@ -12,8 +11,14 @@ import java.util.UUID;
 
 public class DefaultBilling implements BillingStrategy {
 
-    private Money firstHourRate;
-    private Money ratePerHour;
+    private final Money firstHourRate;
+    private final Money ratePerHour;
+
+    // FIX: Added constructor to initialize the rates to prevent NullPointerException
+    public DefaultBilling(Money firstHourRate, Money ratePerHour) {
+        this.firstHourRate = firstHourRate;
+        this.ratePerHour = ratePerHour;
+    }
 
     @Override
     public Invoice bill(Booking booking) {
@@ -23,13 +28,18 @@ public class DefaultBilling implements BillingStrategy {
         Duration parkingDuration = Duration.between(bookedAt, currentTime);
 
         Money cost = firstHourRate.clone();
+        
+        long totalMinutes = parkingDuration.toMinutes();
 
-        if (parkingDuration.compareTo(Duration.ofHours(1)) > 0) {
+        // FIX: Replaced `toHours() - 1` with a logic that correctly rounds up fractional hours 
+        // using total minutes so 1 hr 5 mins charges for 2 hours instead of 1.
+        if (totalMinutes > 60) {
+            long extraMinutes = totalMinutes - 60;
+            long extraHoursToBill = (long) Math.ceil(extraMinutes / 60.0);
+            
             cost.setValue(cost.getValue()
                     .add(ratePerHour.getValue()
-                            .multiply(
-                                    BigDecimal.valueOf(parkingDuration.toHours() - 1)
-                            )
+                            .multiply(BigDecimal.valueOf(extraHoursToBill))
                     )
             );
         }

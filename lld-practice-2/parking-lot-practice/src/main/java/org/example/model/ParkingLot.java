@@ -1,16 +1,15 @@
 package org.example.model;
 
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
 public class ParkingLot {
 
-    private List<Floor> floors;
+    // FIX: Initialized the list to prevent NullPointerException when adding floors
+    private List<Floor> floors = new ArrayList<>();
     private String id;
-
 
 }
