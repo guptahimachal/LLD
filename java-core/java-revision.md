@@ -468,3 +468,479 @@ Instead, senior engineers use modern classes from `java.util.concurrent` because
         orderedSet.forEach(System.out::println); 
     }
     ```
+
+## 8. CompletableFuture + ThreadPoolExecutor Cheat Sheet
+
+This section is a practical "what to use, when to use it" guide for async programming in Java backend systems.
+
+---
+
+### Part A. `CompletableFuture` Mental Model
+
+`CompletableFuture` is used when:
+* You want to run tasks asynchronously without blocking the current thread.
+* You want to chain multiple dependent steps.
+* You want to combine results from multiple independent async calls.
+* You want to handle exceptions in async flows cleanly.
+
+Think of it as:
+* `Future` + callback chaining + result transformation + composition.
+
+---
+
+### Part B. How to Create a `CompletableFuture`
+
+#### 1. `completedFuture(value)`
+```java
+CompletableFuture<String> cf = CompletableFuture.completedFuture("done");
+```
+* **Use Case:** You already have the value, but your method signature must return `CompletableFuture`.
+* **Typical scenario:** Service method returns cached data immediately.
+
+#### 2. `runAsync(Runnable)`
+```java
+CompletableFuture<Void> cf = CompletableFuture.runAsync(() -> sendMetric());
+```
+* **Use Case:** Fire-and-forget background work.
+* **Return type:** `CompletableFuture<Void>`
+* **Use when:** You do not need any result.
+* **Examples:** Audit log, analytics push, notification trigger.
+
+#### 3. `supplyAsync(Supplier<T>)`
+```java
+CompletableFuture<User> cf = CompletableFuture.supplyAsync(() -> fetchUser());
+```
+* **Use Case:** Async task that produces a value.
+* **Use when:** Calling DB, remote API, cache layer, file read, heavy computation.
+
+#### 4. Async with custom executor
+```java
+ExecutorService ioPool = Executors.newFixedThreadPool(20);
+CompletableFuture<User> cf =
+    CompletableFuture.supplyAsync(() -> fetchUser(), ioPool);
+```
+* **Use Case:** Very important in backend code.
+* **Use when:** You do not want work to run on the common pool.
+* **Rule:** For production code, prefer passing your own executor for I/O-heavy or critical workloads.
+
+---
+
+### Part C. Transforming Results
+
+#### 1. `thenApply(fn)`
+```java
+CompletableFuture<String> name =
+    userFuture.thenApply(user -> user.getName());
+```
+* **Use Case:** Transform result from one type to another.
+* **Think:** Sync map operation.
+* **Example:** `User -> userId`, `Response -> DTO`
+
+#### 2. `thenAccept(consumer)`
+```java
+userFuture.thenAccept(user -> System.out.println(user));
+```
+* **Use Case:** Consume result, return nothing.
+* **Think:** End of pipeline where you only need side effect.
+
+#### 3. `thenRun(runnable)`
+```java
+userFuture.thenRun(() -> System.out.println("done"));
+```
+* **Use Case:** Run next step after completion, but without using previous result.
+
+---
+
+### Part D. Chaining Dependent Async Calls
+
+#### `thenCompose(fn)`
+```java
+CompletableFuture<Order> orderFuture =
+    userFuture.thenCompose(user -> fetchLatestOrder(user.getId()));
+```
+* **Use Case:** Second async call depends on first result.
+* **Think:** `flatMap` for async.
+* **Use when:** First call gives `userId`, second call fetches order/profile/recommendations.
+
+**Rule of Thumb:**
+* `thenApply()` -> transforms `T -> U`
+* `thenCompose()` -> transforms `T -> CompletableFuture<U>`
+
+---
+
+### Part E. Combining Independent Async Tasks
+
+#### 1. `thenCombine(other, fn)`
+```java
+CompletableFuture<User> userFuture = fetchUserAsync();
+CompletableFuture<Account> accountFuture = fetchAccountAsync();
+
+CompletableFuture<UserSummary> summaryFuture =
+    userFuture.thenCombine(accountFuture, (user, account) ->
+        new UserSummary(user, account));
+```
+* **Use Case:** Two independent async tasks, combine both results.
+* **Examples:** User data + account data, product data + pricing data.
+
+#### 2. `allOf(f1, f2, f3...)`
+```java
+CompletableFuture<Void> all =
+    CompletableFuture.allOf(f1, f2, f3);
+```
+* **Use Case:** Wait for all tasks to complete.
+* **Examples:** Fan-out API calls, preload caches, bulk processing.
+* **Important:** `allOf()` returns `CompletableFuture<Void>`, so you still extract values from original futures.
+
+#### 3. `anyOf(f1, f2, f3...)`
+```java
+CompletableFuture<Object> first =
+    CompletableFuture.anyOf(f1, f2, f3);
+```
+* **Use Case:** Proceed with whichever task finishes first.
+* **Examples:** Multi-region fallback, fastest mirror/server wins.
+
+---
+
+### Part F. Async vs Non-Async Methods
+
+Examples:
+* `thenApply()`
+* `thenApplyAsync()`
+* `thenApplyAsync(fn, executor)`
+
+**Difference:**
+* `thenApply()` may run in the same thread that completed the previous stage.
+* `thenApplyAsync()` schedules the next stage asynchronously.
+* `thenApplyAsync(fn, executor)` schedules it on your chosen pool.
+
+**Use Case Guidance:**
+* Use non-async variants for lightweight transformations.
+* Use async variants for heavy work or when you want thread isolation.
+* Prefer async with custom executor in production-critical code.
+
+---
+
+### Part G. Error Handling Methods
+
+#### 1. `exceptionally(fn)`
+```java
+CompletableFuture<String> safe =
+    riskyFuture.exceptionally(ex -> "fallback");
+```
+* **Use Case:** Return fallback value on failure.
+* **Examples:** Default config, empty list, cached stale response.
+
+#### 2. `handle((result, ex) -> ...)`
+```java
+CompletableFuture<String> handled =
+    riskyFuture.handle((res, ex) -> ex == null ? res : "fallback");
+```
+* **Use Case:** Always run, whether success or failure.
+* **Use when:** You need both result and exception in one place.
+
+#### 3. `whenComplete((result, ex) -> ...)`
+```java
+riskyFuture.whenComplete((res, ex) -> log.info("completed"));
+```
+* **Use Case:** Side effects like logging, metrics, tracing.
+* **Important:** It does not transform the result by itself.
+
+**Rule of Thumb:**
+* `exceptionally()` -> recover from failure
+* `handle()` -> inspect and transform success/failure
+* `whenComplete()` -> observe completion, usually for logging
+
+---
+
+### Part H. Blocking Methods (Use Carefully)
+
+#### 1. `join()`
+```java
+String result = future.join();
+```
+* **Use Case:** Wait and get result.
+* **Difference:** Throws unchecked `CompletionException`.
+* **Use when:** Simpler code in internal layers or aggregation boundary.
+
+#### 2. `get()`
+```java
+String result = future.get();
+```
+* **Use Case:** Same as `join()`, but checked exception style.
+* **Difference:** Throws checked exceptions like `ExecutionException`, `InterruptedException`.
+
+#### 3. Timeout methods
+```java
+future.orTimeout(2, TimeUnit.SECONDS);
+future.completeOnTimeout(defaultValue, 2, TimeUnit.SECONDS);
+```
+* **`orTimeout()` Use Case:** Fail fast if dependency is too slow.
+* **`completeOnTimeout()` Use Case:** Return fallback value after timeout.
+
+**Senior Rule:** Avoid blocking in request threads unless this is the final aggregation boundary. If everything calls `.join()` too early, async design loses its benefit.
+
+---
+
+### Part I. `CompletableFuture` Use Cases Cheat Sheet
+
+| Situation | Method / Pattern |
+| :--- | :--- |
+| Already have value, but API returns future | `completedFuture()` |
+| Run background task, no return value | `runAsync()` |
+| Run async task that returns value | `supplyAsync()` |
+| Transform result | `thenApply()` |
+| Use result and finish | `thenAccept()` |
+| Run next step without result | `thenRun()` |
+| Dependent async call | `thenCompose()` |
+| Merge two independent futures | `thenCombine()` |
+| Wait for all tasks | `allOf()` |
+| Use fastest task | `anyOf()` |
+| Fallback on exception | `exceptionally()` |
+| Inspect both success and failure | `handle()` |
+| Logging/cleanup after completion | `whenComplete()` |
+| Fail if too slow | `orTimeout()` |
+| Return default if too slow | `completeOnTimeout()` |
+
+---
+
+### Part J. Thread Pool Basics
+
+Java thread pools are usually managed through:
+* `Executor`
+* `ExecutorService`
+* `ScheduledExecutorService`
+* `ThreadPoolExecutor`
+
+`ThreadPoolExecutor` is the real configurable implementation behind many executors.
+
+Constructor shape:
+```java
+new ThreadPoolExecutor(
+    corePoolSize,
+    maximumPoolSize,
+    keepAliveTime,
+    timeUnit,
+    workQueue,
+    threadFactory,
+    rejectedExecutionHandler
+);
+```
+
+---
+
+### Part K. ThreadPoolExecutor Parameters and When They Matter
+
+#### 1. `corePoolSize`
+* Minimum number of worker threads kept ready.
+* **Use Case:** Baseline concurrency level for steady traffic.
+
+#### 2. `maximumPoolSize`
+* Max number of threads pool can grow to.
+* **Use Case:** Burst handling when queue is full.
+
+#### 3. `keepAliveTime`
+* Extra non-core threads die after being idle.
+* **Use Case:** Save memory/resources after traffic spike.
+
+#### 4. `workQueue`
+Common queue choices:
+
+##### `LinkedBlockingQueue`
+* Can queue many tasks.
+* **Use Case:** Stable background workload where queueing is acceptable.
+* **Risk:** Unbounded queue can hide overload and increase memory usage.
+
+##### `ArrayBlockingQueue`
+* Fixed-size bounded queue.
+* **Use Case:** You want backpressure and controlled memory.
+* **Best for:** Production systems where overload must be visible.
+
+##### `SynchronousQueue`
+* No storage. Task must be handed directly to a thread.
+* **Use Case:** Short-lived bursty tasks, aggressive thread scaling.
+* **Used by:** Cached thread pool style behavior.
+
+##### `PriorityBlockingQueue`
+* Tasks are ordered by priority.
+* **Use Case:** Priority job scheduling.
+
+#### 5. `ThreadFactory`
+* Customize thread names, daemon flag, priority, uncaught exception handler.
+* **Use Case:** Better debugging and observability.
+
+#### 6. `RejectedExecutionHandler`
+When pool is saturated and queue is full:
+
+* `AbortPolicy`
+  * Throws exception.
+  * **Use Case:** Fail fast. Good when task loss is unacceptable.
+
+* `CallerRunsPolicy`
+  * Calling thread runs task.
+  * **Use Case:** Natural backpressure.
+  * **Best for:** Slowing producers when consumers are overloaded.
+
+* `DiscardPolicy`
+  * Silently drops task.
+  * **Use Case:** Rare. Only for non-critical best-effort work.
+
+* `DiscardOldestPolicy`
+  * Drops oldest queued task.
+  * **Use Case:** Rare. Sometimes useful in stale-work systems.
+
+---
+
+### Part L. Types of Thread Pools and When to Use Them
+
+#### 1. Fixed Thread Pool
+```java
+ExecutorService pool = Executors.newFixedThreadPool(10);
+```
+* **Backed by:** `ThreadPoolExecutor`
+* **Behavior:** Fixed number of threads, extra tasks wait in queue.
+* **Use Case:** Stable throughput, controlled concurrency.
+* **Examples:** DB calls, API processing, worker consumers.
+* **Good when:** You know the safe concurrency limit.
+
+#### 2. Cached Thread Pool
+```java
+ExecutorService pool = Executors.newCachedThreadPool();
+```
+* **Backed by:** `ThreadPoolExecutor` + `SynchronousQueue`
+* **Behavior:** Creates threads as needed, reuses idle ones.
+* **Use Case:** Many short-lived async tasks.
+* **Risk:** Can create too many threads under heavy load.
+* **Avoid when:** Traffic is unbounded or external dependency is slow.
+
+#### 3. Single Thread Executor
+```java
+ExecutorService pool = Executors.newSingleThreadExecutor();
+```
+* **Behavior:** Exactly one worker thread, tasks execute sequentially.
+* **Use Case:** Ordering must be preserved.
+* **Examples:** Event stream processing, file writes, ordered updates.
+
+#### 4. Scheduled Thread Pool
+```java
+ScheduledExecutorService pool = Executors.newScheduledThreadPool(4);
+```
+* **Use Case:** Delay or periodic execution.
+* **Examples:** Polling, heartbeat, token refill, cleanup jobs.
+
+Important methods:
+```java
+pool.schedule(task, 5, TimeUnit.SECONDS);
+pool.scheduleAtFixedRate(task, 0, 10, TimeUnit.SECONDS);
+pool.scheduleWithFixedDelay(task, 0, 10, TimeUnit.SECONDS);
+```
+
+* `schedule()` -> run once after delay
+* `scheduleAtFixedRate()` -> fixed cadence, next run based on start time
+* `scheduleWithFixedDelay()` -> next run starts after previous run finishes + delay
+
+**Rule:**
+* Use `scheduleAtFixedRate()` for heartbeat/metrics cadence.
+* Use `scheduleWithFixedDelay()` when task duration may vary and overlap must be avoided.
+
+#### 5. Work Stealing Pool
+```java
+ExecutorService pool = Executors.newWorkStealingPool();
+```
+* **Backed by:** `ForkJoinPool`
+* **Use Case:** CPU-heavy tasks split into smaller subtasks.
+* **Examples:** Parallel computation, recursive divide-and-conquer.
+* **Avoid for:** Blocking I/O work.
+
+#### 6. Custom `ThreadPoolExecutor`
+```java
+ExecutorService pool = new ThreadPoolExecutor(
+    10,
+    20,
+    60,
+    TimeUnit.SECONDS,
+    new ArrayBlockingQueue<>(100),
+    Executors.defaultThreadFactory(),
+    new ThreadPoolExecutor.CallerRunsPolicy()
+);
+```
+* **Use Case:** Real backend systems where you need explicit limits, backpressure, queue control, and rejection policy.
+* **Best choice when:** Interviewer asks for production-ready thread-pool design.
+
+---
+
+### Part M. Which Thread Pool Should I Use?
+
+| Use Case | Best Choice |
+| :--- | :--- |
+| Strict ordering, one-by-one processing | `newSingleThreadExecutor()` |
+| Stable worker concurrency | `newFixedThreadPool()` |
+| Delayed or periodic tasks | `newScheduledThreadPool()` |
+| CPU-bound recursive parallel work | `newWorkStealingPool()` / `ForkJoinPool` |
+| Bursty short async tasks with caution | `newCachedThreadPool()` |
+| Production-safe bounded execution | Custom `ThreadPoolExecutor` |
+
+---
+
+### Part N. CPU-Bound vs I/O-Bound Pool Sizing
+
+#### CPU-Bound
+* **Examples:** Parsing, encryption, image processing, rule evaluation.
+* **Pool size rule:** Around number of CPU cores.
+* **Why:** Too many threads cause context switching overhead.
+
+#### I/O-Bound
+* **Examples:** DB calls, HTTP calls, Kafka/network waits, file reads.
+* **Pool size rule:** Usually larger than CPU cores, because threads spend time waiting.
+* **Why:** While one thread is blocked on I/O, another can run.
+
+**Interview answer:**
+* CPU-bound -> small pool near core count
+* I/O-bound -> larger pool based on wait time vs compute time
+
+---
+
+### Part O. Important ExecutorService Methods
+
+#### Task submission
+```java
+pool.execute(runnable);          // no return value
+Future<String> f = pool.submit(callable); // returns Future
+```
+
+* `execute()` -> fire task, no `Future`
+* `submit()` -> use when result/exception tracking is needed
+
+#### Bulk submission
+```java
+pool.invokeAll(tasks);
+pool.invokeAny(tasks);
+```
+
+* `invokeAll()` -> run all, wait for all
+* `invokeAny()` -> return one successful result, cancel rest if possible
+
+#### Shutdown
+```java
+pool.shutdown();
+pool.shutdownNow();
+pool.awaitTermination(10, TimeUnit.SECONDS);
+```
+
+* `shutdown()` -> stop accepting new tasks, finish queued tasks
+* `shutdownNow()` -> attempt to interrupt running tasks
+* `awaitTermination()` -> wait for graceful stop
+
+---
+
+### Part P. Senior Backend Rules of Thumb
+
+1. Do not use the default common pool blindly for business-critical async work.
+2. Separate CPU-bound and I/O-bound workloads into different executors.
+3. Prefer bounded queues in production to avoid silent memory blowups.
+4. Always think about rejection policy. Overload behavior is a design choice.
+5. Use `CallerRunsPolicy` when you want simple backpressure.
+6. Use `CompletableFuture.thenCompose()` for dependent async calls, not nested futures.
+7. Use `allOf()` for fan-out aggregation, but extract results carefully from original futures.
+8. Use timeout methods for remote calls so stuck dependencies do not stall the whole pipeline.
+9. Do not call `.join()` too early in the flow or you lose non-blocking benefit.
+10. Name your pool threads clearly in production for debugging.
